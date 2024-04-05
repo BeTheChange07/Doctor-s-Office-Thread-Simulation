@@ -11,132 +11,212 @@
 
 using namespace std;
 
-// create a global patient queue of type int
-queue<int> patientQueue;
 
-// global patient id
-int patientId = 1;
+
+// structure of patient info
+struct PatientInfo {
+    int patientId;
+    int doctorId;
+
+    PatientInfo(int id , int doctorNum ){
+        patientId = id;
+        doctorId = doctorNum;
+    }
+};
+
+
+// global queues
+queue<PatientInfo> preReceptionistPatientQueue;
+queue<PatientInfo> preNursePatientQueue[3];
+queue<PatientInfo> doctorOfficeQueue[3];
+
+// global variables
+int patientCount = 0;
+int nurseCount = 0;
+int docCount = 0;
 
 // Global semaphores
-sem_t create_patient;
 sem_t print_to_consol;
+sem_t edit_patient_count;
+sem_t edit_nurse_count;
+sem_t edit_doctor_count;
+sem_t edit_pre_receptionist_patient_queue;
+sem_t patient_enter;
+sem_t edit_nurse_queue[3];
+sem_t edit_doc_office_queue[3];
+
+sem_t patient_ready_receptionist;
+sem_t tell_nurse_patient_ready[3];
+sem_t tell_patient_receptionist_done[15];
+sem_t nurse_ready[3];
 sem_t receptionist_available;
-sem_t add_patient_queue_edit;
-sem_t nurse_call_patient[3];
-sem_t patient_by_office[3];
 sem_t office_empty[3];
-sem_t patient_ready_receptionist[15];
-sem_t receptionist_done_patient[15];
-sem_t patient_ready_nurse[15];
-sem_t patient_in_waiting_room_ready_nurse[15];
-sem_t patient_in_office[15];
-sem_t patient_left[15];
-sem_t doctor_heard_patient[3];
-sem_t doctor_gives_advice[3];
+sem_t check_in_patient;
+sem_t nurse_take_patient_to_office[3];
+sem_t patient_by_office[3];
+sem_t patient_in_office[3];
+sem_t doctor_visit_patient[3];
+sem_t doctor_done_listen[3];
+sem_t patient_check_out[3];
 
 
 // this function is used to initialize all the semaphores
 void initializeSemaphores() {
 
-    sem_init(&receptionist_available, 0, 1);
-    sem_init(&add_patient_queue_edit, 0, 1);
     sem_init(&print_to_consol,0,1);
-    sem_init(&create_patient,0,1);
+    sem_init(&patient_enter,0,1);
+    sem_init(&receptionist_available, 0, 1);
+    sem_init(&edit_patient_count,0 ,1 );
+    sem_init(&edit_nurse_count,0 , 1);
+    sem_init(&edit_doctor_count,0 ,1 );
+    sem_init(&edit_pre_receptionist_patient_queue,0 ,1 );
+    sem_init(&patient_ready_receptionist,0 , 0);
+    sem_init(&receptionist_available,0 ,1);
+    sem_init(&check_in_patient,0 , 1);
+
+
 
     for (int i = 0; i < 3; i++) {
-        sem_init(&nurse_call_patient[i], 0, 1);
-        sem_init(&patient_by_office[i], 0, 0);
-        sem_init(&office_empty[i], 0, 1);
-        sem_init(&doctor_heard_patient[i], 0, 0);
-        sem_init(&doctor_gives_advice[i], 0, 0);
+        sem_init(&edit_nurse_queue[i],0 ,1);
+        sem_init(&edit_doc_office_queue[i],0 , 1);
+        sem_init(&tell_nurse_patient_ready[i],0 , 0 );
+        sem_init(&nurse_ready[i],0 ,0);
+        sem_init(&office_empty[i],0 , 1);
+        sem_init(&nurse_take_patient_to_office[i],0 , 0);
+        sem_init(&patient_in_office[i],0 ,1 );
+        sem_init(&doctor_visit_patient[i],0 ,1 );
+        sem_init(&doctor_done_listen[i],0 ,0 );
+        sem_init(&patient_check_out[i],0 ,1 );
+
+
     }
     for (int i = 0; i < 15; i++) {
-        sem_init(&patient_ready_receptionist[i], 0, 0);
-        sem_init(&receptionist_done_patient[i], 0, 0);
-        sem_init(&patient_ready_nurse[i], 0, 0);
-        sem_init(&patient_in_waiting_room_ready_nurse[i], 0, 0);
-        sem_init(&patient_in_office[i], 0, 0);
-        sem_init(&patient_left[i], 0, 0);
+        sem_init(&tell_patient_receptionist_done[i],0 ,0);
+        sem_init(&patient_by_office[i],0 ,1);
+
     }
 }
 
+
+
+// this function is the patient thread function
 extern "C" void* PatientThreadStart(void* arg) {
 
-    sem_wait(&create_patient);
+    int doctorId;
+    int patientId;
 
-    int internalPatientId = patientId++;
-    int patientIndex = internalPatientId - 1;
+    // patient enter and waits to see receptionist
+    sem_wait(&edit_patient_count);
+    patientId = patientCount++;
+    sem_post(&edit_patient_count);
 
-
-    // get random doctor and assign to doctor id
+    // get random doc num from 1-3
     random_device ranNum;
     mt19937 gen(ranNum());
     uniform_int_distribution<> distrib(1,3);
-    int doctorId = distrib(gen);
-    int doctorIndex = doctorId -1;
+    doctorId = distrib(gen);
 
-    sem_post(&create_patient);
-
-
-    // the sequence of events for patient
+    sem_wait(&patient_enter);
+    sem_wait(&edit_pre_receptionist_patient_queue);
+    preReceptionistPatientQueue.emplace(patientId,doctorId);
+    sem_post(&edit_pre_receptionist_patient_queue);
     sem_wait(&print_to_consol);
-    cout << "Patient " << internalPatientId << " enters waiting room, waits for receptionist\n" << flush;
+    cout << "Patient " << patientId << " enters waiting room, waits for receptionist\n" << flush;
     sem_post(&print_to_consol);
-    sem_wait(&add_patient_queue_edit);
-    patientQueue.push(internalPatientId);  // push the patient id to the queue
-    sem_post(&add_patient_queue_edit);
-    sem_post(&patient_ready_receptionist[patientIndex]);
-    sem_wait(&receptionist_available);
-    sem_wait(&receptionist_done_patient[patientIndex]);
-    cout << "Patient " << internalPatientId << " leaves receptionist and sits in waiting room\n" << flush;
-    sem_post(&patient_in_waiting_room_ready_nurse[patientIndex]);
-    sem_wait(&nurse_call_patient[doctorIndex]);
-    sem_wait(&patient_by_office[doctorIndex]);
-    cout << "Patient " << internalPatientId << " enters doctor " << doctorId << "'s office\n" << flush;
-    sem_post(&patient_in_office[doctorIndex]);
-    sem_wait(&doctor_heard_patient[doctorIndex]);
-    cout << "Patient " << internalPatientId << " receives advice from doctor " << doctorId  << endl << flush;
-    sem_wait(&doctor_gives_advice[doctorIndex]);
-    cout << "Patient " << internalPatientId << " leaves\n" << flush;
-    sem_post(&patient_left[patientIndex]);
+    sem_post(&patient_enter);
 
+    sem_post(&patient_ready_receptionist);
+    sem_wait(&receptionist_available);
+    sem_wait(&tell_patient_receptionist_done[patientId]);
+
+    // patient leaves receptionist and goes back into the waiting room
+    sem_wait(&print_to_consol);
+    cout << "Patient " << patientId << " leaves receptionist and sits in waiting room\n" << flush;
+    sem_post(&print_to_consol);
+
+    // wait for nurse to call patient
+    sem_wait(&nurse_ready[doctorId]);
+
+    // nurse calls patient
+    sem_wait(&patient_by_office[patientId]);
+    sem_wait(&print_to_consol);
+    cout << "Patient " << patientId << " enters doctor " << doctorId << "'s office" << flush;
+    sem_post(&print_to_consol);
+
+    // patient in doctors office
+    sem_post(&patient_in_office[doctorId]);
+    sem_wait(&doctor_done_listen[doctorId]);
+    sem_wait(&print_to_consol);
+    cout << "Patient " << patientId << " receives advice from doctor " << doctorId << flush;
+    sem_post(&print_to_consol);
+
+    // patient finished with doctor
+    sem_wait(&patient_check_out[patientId]);
+    sem_wait(&print_to_consol);
+    cout << "Patient " << patientId << " leaves" << flush;
+    sem_post(&print_to_consol);
+    sem_post(&office_empty[doctorId]);
+    sem_post(&patient_check_out[patientId]);
 
 
     return nullptr;
 }
+
 
 
 extern "C" void* ReceptionistThreadStart(void* arg) {
 
     int patientId;
-    int patientIndex;
+    int doctorId;
 
-    while(true){
-        if(!patientQueue.empty()){
-            // get the at the patient front of the queue
-            sem_wait(&add_patient_queue_edit);
-            patientId = patientQueue.front();
-            patientQueue.pop();
-            sem_post(&add_patient_queue_edit);
-            patientIndex = patientId -1;
+    // receptionist check in patient
+    sem_wait(&patient_ready_receptionist);
+    sem_wait(&check_in_patient);
+    sem_wait(&edit_pre_receptionist_patient_queue);
+    PatientInfo patientInfo = preReceptionistPatientQueue.front();
+    preReceptionistPatientQueue.pop();
+    sem_post(&edit_pre_receptionist_patient_queue);
+    patientId = patientInfo.patientId;
+    doctorId = patientInfo.doctorId;
+    sem_wait(&print_to_consol);
+    cout << "Receptionist registers patient " << patientId << endl << flush;
+    sem_post(&print_to_consol);
+    sem_post(&check_in_patient);
 
-            // process the patient
-            sem_wait(&patient_ready_receptionist[patientIndex]);
-            sem_wait(&print_to_consol);
-            cout << "Receptionist registers patient " << patientId << endl <<flush;
-            sem_post(&print_to_consol);
-            sem_post(&receptionist_done_patient[patientIndex]);
-            sem_post(&patient_ready_nurse[patientIndex]);
-            sem_post(&receptionist_available);
+    //send patient back to waiting room
+    sem_post(&tell_patient_receptionist_done[patientId]);
 
+    // put patient in line for doctor office and tell nurse
+    sem_wait(&edit_nurse_queue[doctorId]);
+    preNursePatientQueue[doctorId].emplace(patientInfo);
+    sem_post(&edit_nurse_queue[doctorId]);
+    sem_post(&tell_nurse_patient_ready[doctorId]);
 
-        }
-        else{
-            continue;
-        }
+    // signal receptionist can take next patient
+    sem_post(&receptionist_available);
+
 
     return nullptr;
 }
+
+
+
+
+extern "C" void* NurseThreadStart(void* arg) {
+
+
+
+
+    return nullptr;
+}
+
+
+extern "C" void* DoctorThreadStart(void* arg) {
+
+
+
+
+    return nullptr;
 }
 
 
@@ -174,15 +254,15 @@ int main(int argc, char *argv[]){
 
 
 
-    /*/ Initialize and create the doctor and nurse threads
+    // Initialize and create the doctor and nurse threads
     for (int i = 0; i < numberOfDoctorAndNurse; i++) {
         // creat the doctor and nurse threads
-        pthread_create(&doctorThreads[i], NULL, DoctorThreadStart, (void*)&doctors[i]);
-        pthread_create(&nurseThreads[i], NULL, NurseThreadStart, (void*)&nurses[i]);
+        pthread_create(&doctorThreads[i], NULL, DoctorThreadStart, NULL);
+        pthread_create(&nurseThreads[i], NULL, NurseThreadStart, NULL);
 
 
     }
-     */
+
 
     // join all threads
     for (auto& thread : patientThreads) {
@@ -191,7 +271,7 @@ int main(int argc, char *argv[]){
 
     pthread_join(receptionistThread, NULL);
 
-    /*
+
     for (auto& thread : nurseThreads) {
         pthread_join(thread, NULL);
     }
@@ -199,7 +279,7 @@ int main(int argc, char *argv[]){
     for (auto& thread : doctorThreads) {
         pthread_join(thread, NULL);
     }
-     */
+
 
 
 
