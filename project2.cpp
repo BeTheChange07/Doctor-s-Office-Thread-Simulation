@@ -33,13 +33,13 @@ queue<PatientInfo> doctorOfficeQueue[3];
 int patientCount = 0;
 int nurseCount = 0;
 int docCount = 0;
-int patientLeft;
+
 
 
 
 // Global semaphores
-sem_t check_if_patient_left;
-sem_t patient_after_receptionist_in_waiting_room;
+
+
 sem_t print_to_consol;
 sem_t patient_enter;
 sem_t receptionist_available;
@@ -54,12 +54,12 @@ sem_t nurse_get_doctor[3];
 sem_t edit_nurse_queue[3];
 sem_t edit_doc_office_queue[3];
 sem_t tell_nurse_patient_ready[3];
-
 sem_t patient_in_office[3];
 sem_t office_empty[3];
 sem_t doctor_visit_patient[3];
 sem_t nurse_take_patient_to_office[3];
 
+sem_t patient_after_receptionist_in_waiting_room[15];
 sem_t patient_by_office[15];
 sem_t tell_patient_receptionist_done[15];
 sem_t nurse_ready[15];
@@ -70,8 +70,8 @@ sem_t patient_check_out[15];
 // this function is used to initialize all the semaphores
 void initializeSemaphores() {
 
-    sem_init(&check_if_patient_left,0, 1);
-    sem_init(&patient_after_receptionist_in_waiting_room, 0, 0);
+
+
     sem_init(&print_to_consol,0,1);
     sem_init(&patient_enter,0,1);
     sem_init(&receptionist_available, 0, 1);
@@ -84,6 +84,7 @@ void initializeSemaphores() {
 
 
     for (int i = 0; i < 3; i++) {
+        sem_init(&patient_after_receptionist_in_waiting_room[i], 0, 0);
         sem_init(&nurse_get_doctor[i],0,0);
         sem_init(&edit_nurse_queue[i],0 ,1);
         sem_init(&edit_doc_office_queue[i],0 , 1);
@@ -148,7 +149,7 @@ extern "C" void* PatientThreadStart(void* arg) {
     sem_post(&print_to_consol);
 
 
-    sem_post(&patient_after_receptionist_in_waiting_room);
+    sem_post(&patient_after_receptionist_in_waiting_room[patientId]);
 
     // wait for nurse to call patient
     sem_wait(&nurse_ready[patientId]);
@@ -175,14 +176,7 @@ extern "C" void* PatientThreadStart(void* arg) {
     sem_post(&patient_check_out[patientId]);
 
 
-    // mark off patients from patient list and exit if no more patients
-    sem_wait(&check_if_patient_left);
-    patientLeft--;
-    if(patientLeft == 0){
-        cout << "Simulation complete" << endl;
-        exit(0);
-    }
-    sem_post(&check_if_patient_left);
+
 
 
     return nullptr;
@@ -221,8 +215,7 @@ extern "C" void* ReceptionistThreadStart(void* arg) {
         //send patient back to waiting room
         sem_post(&tell_patient_receptionist_done[patientId]);
 
-        // wait till patient in waiting room
-        sem_wait(&patient_after_receptionist_in_waiting_room);
+
 
         // tell nurse patient ready
         sem_post(&tell_nurse_patient_ready[doctorId]);
@@ -247,9 +240,12 @@ extern "C" void* NurseThreadStart(void* arg) {
 
     while(true){
 
-        // nurse waits for patient to be back in waiting room and office to be empty
+        // nurse waits for receptionist tells nurse patient registered and office to be empty
+
         sem_wait(&tell_nurse_patient_ready[doctorId]);
         sem_wait(&office_empty[doctorId]);
+
+
 
         // nurse gets info of patient
         sem_wait(&edit_nurse_queue[doctorId]);
@@ -257,6 +253,9 @@ extern "C" void* NurseThreadStart(void* arg) {
         preNursePatientQueue[doctorId].pop();
         sem_post(&edit_nurse_queue[doctorId]);
         patientId = patientInfo.patientId;
+
+        // wait till patient in waiting room
+        sem_wait(&patient_after_receptionist_in_waiting_room[patientId]);
 
 
         //nurse tells patient to come with them to office
@@ -339,9 +338,6 @@ int main(int argc, char *argv[]){
     // print to console number of patients, nurses, and doctors
     cout << "Run with " << numberOfPatient << " patients, " << numberOfDoctorAndNurse << " nurses, " << numberOfDoctorAndNurse << " doctors" << endl << endl;
 
-    // assign number of patients left
-    patientLeft = numberOfPatient;
-
     // initialize all the semaphores
     initializeSemaphores();
 
@@ -382,23 +378,8 @@ int main(int argc, char *argv[]){
         pthread_join(thread, NULL);
     }
 
-    pthread_join(receptionistThread, NULL);
-
-
-    for (auto& thread : nurseThreads) {
-        pthread_join(thread, NULL);
-    }
-
-    for (auto& thread : doctorThreads) {
-        pthread_join(thread, NULL);
-    }
-
-
-
-
-
-
-    return 0;
+    cout << "Simulation Complete\n";
+    exit(0);
 
 
 }
