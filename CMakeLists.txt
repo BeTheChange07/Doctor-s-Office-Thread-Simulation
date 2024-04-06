@@ -3,4 +3,4 @@ project(fix_osproj_2)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(fix_osproj_2 main.cpp)
+add_executable(fix_osproj_2 project2.cpp)
