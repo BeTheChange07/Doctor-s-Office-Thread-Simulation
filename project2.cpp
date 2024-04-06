@@ -54,13 +54,13 @@ sem_t nurse_get_doctor[3];
 sem_t edit_nurse_queue[3];
 sem_t edit_doc_office_queue[3];
 sem_t tell_nurse_patient_ready[3];
-sem_t patient_by_office[3];
+
 sem_t patient_in_office[3];
 sem_t office_empty[3];
 sem_t doctor_visit_patient[3];
 sem_t nurse_take_patient_to_office[3];
 
-
+sem_t patient_by_office[15];
 sem_t tell_patient_receptionist_done[15];
 sem_t nurse_ready[15];
 sem_t doctor_done_listen[15];
@@ -88,7 +88,6 @@ void initializeSemaphores() {
         sem_init(&edit_nurse_queue[i],0 ,1);
         sem_init(&edit_doc_office_queue[i],0 , 1);
         sem_init(&tell_nurse_patient_ready[i],0 , 0 );
-        sem_init(&patient_by_office[i],0 ,0);
         sem_init(&patient_in_office[i],0 ,0 );
         sem_init(&office_empty[i],0 , 1);
         sem_init(&doctor_visit_patient[i],0 ,1 );
@@ -99,7 +98,7 @@ void initializeSemaphores() {
 
 
     for (int i = 0; i < 15; i++) {
-
+        sem_init(&patient_by_office[i],0 ,0);
         sem_init(&doctor_done_listen[i],0 ,0 );
         sem_init(&nurse_ready[i],0 ,0);
         sem_init(&tell_patient_receptionist_done[i],0 ,0);
@@ -403,4 +402,3 @@ int main(int argc, char *argv[]){
 
 
 }
-
