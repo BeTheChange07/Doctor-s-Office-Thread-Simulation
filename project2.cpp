@@ -33,6 +33,7 @@ queue<PatientInfo> doctorOfficeQueue[3];
 int patientCount = 0;
 int nurseCount = 0;
 int docCount = 0;
+int maxDocNum;
 
 
 
@@ -122,10 +123,10 @@ extern "C" void* PatientThreadStart(void* arg) {
     patientId = patientCount++;
     sem_post(&edit_patient_count);
 
-    // get random doc num from 0-2
+    // get random doc num from 0-maxDocNum
     random_device ranNum;
     mt19937 gen(ranNum());
-    uniform_int_distribution<> distrib(0,2);
+    uniform_int_distribution<> distrib(0, maxDocNum);
     doctorId = distrib(gen);
 
     // patient enter and waits to see receptionist
@@ -174,9 +175,6 @@ extern "C" void* PatientThreadStart(void* arg) {
     sem_post(&print_to_consol);
     sem_post(&office_empty[doctorId]);
     sem_post(&patient_check_out[patientId]);
-
-
-
 
 
     return nullptr;
@@ -334,6 +332,9 @@ int main(int argc, char *argv[]){
     // the second argument of the command prompt is the number of patients
     int numberOfDoctorAndNurse = atoi(argv[1]);
     int numberOfPatient = atoi(argv[2]);
+
+    // assign max doctor number for random number generator
+    maxDocNum = numberOfDoctorAndNurse -1;
 
     // print to console number of patients, nurses, and doctors
     cout << "Run with " << numberOfPatient << " patients, " << numberOfDoctorAndNurse << " nurses, " << numberOfDoctorAndNurse << " doctors" << endl << endl;
